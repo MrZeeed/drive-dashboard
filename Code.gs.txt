@@ -1,0 +1,49 @@
+var ROOT = "your profile code here";
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile("index");
+}
+
+function getFiles(folderId) {
+  var folder = DriveApp.getFolderById(folderId || ROOT);
+
+  var data = {
+    name: folder.getName(),
+    id: folder.getId(),
+    folders: [],
+    files: []
+  };
+
+  // GET FOLDERS
+  var subfolders = folder.getFolders();
+  while (subfolders.hasNext()) {
+    var f = subfolders.next();
+    data.folders.push({
+      name: f.getName(),
+      id: f.getId()
+    });
+  }
+
+  // GET FILES
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var file = files.next();
+    data.files.push({
+      name: file.getName(),
+      id: file.getId(),
+      preview: "https://drive.google.com/file/d/" + file.getId() + "/preview"
+    });
+  }
+
+  return data;
+}
+
+// DELETE
+function deleteFile(id) {
+  DriveApp.getFileById(id).setTrashed(true);
+}
+
+// RENAME
+function renameFile(id, newName) {
+  DriveApp.getFileById(id).setName(newName);
+}

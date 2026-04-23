@@ -1,4 +1,4 @@
-# 🚀 Drive Dashboard (Google Drive File Manager)
+#  Drive Dashboard (Google Drive File Manager)
 
 A modern, lightweight **Google Drive file management dashboard** built using **Google Apps Script + HTML/CSS/JavaScript**.
 

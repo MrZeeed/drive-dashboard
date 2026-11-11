@@ -1,6 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Drive Dashboard</title>
   <base target="_top">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
 
@@ -140,6 +143,33 @@
     #breadcrumbs { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
     #breadcrumbs button { overflow-wrap: anywhere; }
     .menu-note { color: #94a3b8; font-size: 12px; }
+    * { box-sizing: border-box; }
+    .main { min-width: 0; }
+    .sidebar { flex-shrink: 0; }
+    label[for="search"] { display: block; margin-bottom: 7px; }
+    .search { width: min(100%, 420px); }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
+    .btns { flex-wrap: wrap; }
+    .btn { min-height: 38px; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #22d3ee; outline-offset: 3px; }
+    button:disabled { opacity: .55; cursor: default; }
+    .thumb iframe { pointer-events: none; }
+    .panel { position: fixed; top: 0; bottom: 0; right: 0; width: min(360px, 100%); overflow-y: auto; background: #0c1729; z-index: 5; transform: none; }
+    .panel[hidden] { display: none; }
+    #pname { overflow-wrap: anywhere; }
+    #status { color: #b3c6da; }
+    #retry[hidden] { display: none; }
+    .empty-state { grid-column: 1 / -1; color: #b3c6da; }
+    @media (max-width: 700px) {
+      body { display: block; min-height: 100vh; height: auto; overflow: auto; }
+      .sidebar { width: 100%; padding: 15px 20px; border-right: 0; border-bottom: 1px solid #ffffff20; }
+      .sidebar h2 { margin: 0 0 10px; }
+      .menu { display: flex; align-items: center; gap: 15px; margin-top: 0; }
+      .menu-note { margin: 0; }
+      .main { overflow: visible; }
+      .folder-navigation { align-items: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } .card:hover { transform: none; } }
   </style>
 </head>
 
@@ -156,7 +186,7 @@
 </div>
 
 <!-- MAIN -->
-<div class="main">
+<main class="main" id="main" tabindex="-1">
   <div class="folder-navigation"><button class="btn" id="back" type="button" disabled>Back</button><nav id="breadcrumbs" aria-label="Folder breadcrumb"></nav></div>
   <label for="search">Search this folder</label>
   <input class="search" id="search" type="search" placeholder="Search files and folders…" autocomplete="off">
@@ -164,16 +194,18 @@
   <p id="status" role="status" aria-live="polite">Loading files…</p>
   <button class="btn" id="retry" type="button" hidden>Retry loading</button>
   <div class="grid" id="files" aria-busy="false"></div>
-</div>
+</main>
 
 <!-- RIGHT PANEL -->
-<div class="panel" id="panel">
+<aside class="panel" id="panel" aria-labelledby="pname" hidden>
+  <button class="btn" id="close-preview" type="button">Close preview</button>
   <h3 id="pname"></h3>
-  <iframe id="preview" style="width:100%;height:200px;"></iframe>
-</div>
+  <iframe id="preview" title="Selected file preview" style="width:100%;height:200px;"></iframe>
+</aside>
 
 <script>
 let currentFolder = null;
+let previewTrigger = null;
 let currentData = null;
 let folderPath = [];
 let busy = false;
@@ -312,10 +344,28 @@ function render(data) {
 
 function openPreview(name, url) {
   if (!url) return;
-  document.getElementById("panel").classList.add("active");
+  previewTrigger = document.activeElement;
+  const panel = document.getElementById("panel");
+  panel.hidden = false;
+  panel.classList.add("active");
   document.getElementById("pname").textContent = name;
+  document.getElementById("preview").title = "Preview of " + name;
   document.getElementById("preview").src = url;
+  document.getElementById("close-preview").focus();
 }
+
+function closePreview() {
+  const panel = document.getElementById("panel");
+  panel.hidden = true;
+  panel.classList.remove("active");
+  document.getElementById("preview").removeAttribute("src");
+  if (previewTrigger && previewTrigger.isConnected) previewTrigger.focus();
+}
+
+document.getElementById("close-preview").addEventListener("click", closePreview);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !document.getElementById("panel").hidden) closePreview();
+});
 
 function deleteFile(id) {
   if (busy) return;

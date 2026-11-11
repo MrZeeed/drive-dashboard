@@ -135,6 +135,11 @@
       .folder-card, .file-title { color: inherit; font: inherit; text-align: left; border: 0; }
     .file-title { display: block; width: 100%; padding: 10px 0; background: transparent; cursor: pointer; overflow-wrap: anywhere; }
     .folder-card { cursor: pointer; }
+    .folder-navigation { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; }
+    #back { flex: 0 0 auto; }
+    #breadcrumbs { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+    #breadcrumbs button { overflow-wrap: anywhere; }
+    .menu-note { color: #94a3b8; font-size: 12px; }
   </style>
 </head>
 
@@ -145,15 +150,14 @@
   <h2>Drive</h2>
 
   <div class="menu">
-    <div onclick="load()">All Files</div>
-    <div>Recent</div>
-    <div>Starred</div>
-    <div>Trash</div>
+    <button class="btn" type="button" id="all-files">All Files</button>
+    <p class="menu-note">Recent, Starred and Trash views are not connected in this version.</p>
   </div>
 </div>
 
 <!-- MAIN -->
 <div class="main">
+  <div class="folder-navigation"><button class="btn" id="back" type="button" disabled>Back</button><nav id="breadcrumbs" aria-label="Folder breadcrumb"></nav></div>
   <label for="search">Search this folder</label>
   <input class="search" id="search" type="search" placeholder="Search files and folders…" autocomplete="off">
 
@@ -171,6 +175,7 @@
 <script>
 let currentFolder = null;
 let currentData = null;
+let folderPath = [];
 let busy = false;
 let requestNumber = 0;
 let lastRequestedFolder = null;
@@ -181,6 +186,8 @@ function setStatus(message) {
 
 function setBusy(value) {
   busy = value;
+  const back = document.getElementById("back");
+  if (back) back.disabled = value || folderPath.length < 2;
   document.getElementById("files").setAttribute("aria-busy", String(value));
   document.querySelectorAll("#files button").forEach(button => {
     if (value) { if (button.dataset.wasDisabled === undefined) button.dataset.wasDisabled = String(button.disabled); button.disabled = true; }
@@ -199,11 +206,12 @@ function previewUrl(id) {
     ? "https://drive.google.com/file/d/" + encodeURIComponent(id) + "/preview" : null;
 }
 
-function load(folderId = null) {
+function load(folderId = null, pathIndex = null) {
   if (typeof google === "undefined" || !google.script || !google.script.run) {
     setStatus("Open the deployed Google Apps Script web app to connect to your Drive.");
     return;
   }
+  const targetPath = folderId ? folderPath.slice(0, pathIndex === null ? folderPath.length : pathIndex + 1) : [];
   const request = ++requestNumber;
   lastRequestedFolder = folderId;
   document.getElementById("retry").hidden = true;
@@ -212,13 +220,27 @@ function load(folderId = null) {
   google.script.run.withSuccessHandler(data => {
     if (request !== requestNumber) return;
     try {
+      const existing = targetPath.findIndex(item => item.id === data.id);
+      folderPath = existing >= 0 ? targetPath.slice(0, existing + 1) : targetPath.concat({ id: data.id, name: data.name });
       render(data);
+      renderBreadcrumbs();
       setBusy(false);
       applySearch();
     } catch (error) { showFailure(error); }
   }).withFailureHandler(error => {
     if (request === requestNumber) showFailure(error);
   }).getFiles(folderId);
+}
+
+function renderBreadcrumbs() {
+  const nav = document.getElementById("breadcrumbs");
+  nav.replaceChildren();
+  folderPath.forEach((folder, index) => {
+    const button = makeButton(folder.name, () => load(folder.id, index));
+    if (index === folderPath.length - 1) { button.disabled = true; button.setAttribute("aria-current", "location"); }
+    nav.appendChild(button);
+  });
+  document.getElementById("back").disabled = folderPath.length < 2;
 }
 
 function makeButton(label, action, className = "btn") {
@@ -314,6 +336,10 @@ function renameFile(id) {
   }
 }
 
+document.getElementById("all-files").addEventListener("click", () => load());
+document.getElementById("back").addEventListener("click", () => {
+  if (folderPath.length > 1) load(folderPath[folderPath.length - 2].id, folderPath.length - 2);
+});
 document.getElementById("search").addEventListener("input", applySearch);
 document.getElementById("retry").addEventListener("click", () => load(lastRequestedFolder));
 load();

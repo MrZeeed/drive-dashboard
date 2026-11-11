@@ -154,7 +154,8 @@
 
 <!-- MAIN -->
 <div class="main">
-  <input class="search" placeholder="Search...">
+  <label for="search">Search this folder</label>
+  <input class="search" id="search" type="search" placeholder="Search files and folders…" autocomplete="off">
 
   <p id="status" role="status" aria-live="polite">Loading files…</p>
   <button class="btn" id="retry" type="button" hidden>Retry loading</button>
@@ -169,6 +170,7 @@
 
 <script>
 let currentFolder = null;
+let currentData = null;
 let busy = false;
 let requestNumber = 0;
 let lastRequestedFolder = null;
@@ -212,7 +214,7 @@ function load(folderId = null) {
     try {
       render(data);
       setBusy(false);
-      setStatus(data.folders.length + " folders · " + data.files.length + " files");
+      applySearch();
     } catch (error) { showFailure(error); }
   }).withFailureHandler(error => {
     if (request === requestNumber) showFailure(error);
@@ -228,6 +230,19 @@ function makeButton(label, action, className = "btn") {
   return button;
 }
 
+function filteredEntries(data, query) {
+  const text = query.trim().toLocaleLowerCase();
+  const matches = item => String(item.name).toLocaleLowerCase().includes(text);
+  return { folders: data.folders.filter(matches), files: data.files.filter(matches) };
+}
+
+function applySearch() {
+  if (!currentData || busy) return;
+  const entries = filteredEntries(currentData, document.getElementById("search").value);
+  renderEntries(entries);
+  setStatus(entries.folders.length + " folders · " + entries.files.length + " files shown");
+}
+
 function renderEntries(data) {
   const grid = document.getElementById("files");
   grid.replaceChildren();
@@ -235,6 +250,12 @@ function renderEntries(data) {
     const button = makeButton("📁 " + String(folder.name), () => load(folder.id), "card folder-card");
     grid.appendChild(button);
   });
+  if (!data.folders.length && !data.files.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No matching files or folders. Clear the search or choose a different folder.";
+    grid.appendChild(empty);
+  }
   data.files.forEach(file => {
     const card = document.createElement("article");
     card.className = "card";
@@ -263,7 +284,8 @@ function renderEntries(data) {
 
 function render(data) {
   currentFolder = data.id;
-  renderEntries(data);
+  currentData = data;
+  renderEntries(filteredEntries(data, document.getElementById("search").value));
 }
 
 function openPreview(name, url) {
@@ -292,6 +314,7 @@ function renameFile(id) {
   }
 }
 
+document.getElementById("search").addEventListener("input", applySearch);
 document.getElementById("retry").addEventListener("click", () => load(lastRequestedFolder));
 load();
 </script>

@@ -132,6 +132,9 @@
       transform: translateX(0);
     }
 
+      .folder-card, .file-title { color: inherit; font: inherit; text-align: left; border: 0; }
+    .file-title { display: block; width: 100%; padding: 10px 0; background: transparent; cursor: pointer; overflow-wrap: anywhere; }
+    .folder-card { cursor: pointer; }
   </style>
 </head>
 
@@ -165,71 +168,82 @@
 <script>
 let currentFolder = null;
 
-function load(folderId=null) {
+function previewUrl(id) {
+  return typeof id === "string" && /^[A-Za-z0-9_-]+$/.test(id)
+    ? "https://drive.google.com/file/d/" + encodeURIComponent(id) + "/preview" : null;
+}
+
+function load(folderId = null) {
   google.script.run.withSuccessHandler(render).getFiles(folderId);
+}
+
+function makeButton(label, action, className = "btn") {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
+function renderEntries(data) {
+  const grid = document.getElementById("files");
+  grid.replaceChildren();
+  data.folders.forEach(folder => {
+    const button = makeButton("📁 " + String(folder.name), () => load(folder.id), "card folder-card");
+    grid.appendChild(button);
+  });
+  data.files.forEach(file => {
+    const card = document.createElement("article");
+    card.className = "card";
+    const url = previewUrl(file.id);
+    const name = String(file.name);
+    const thumb = document.createElement("div");
+    thumb.className = "thumb";
+    if (url) {
+      const frame = document.createElement("iframe");
+      frame.src = url;
+      frame.title = "Preview of " + name;
+      frame.loading = "lazy";
+      thumb.appendChild(frame);
+    }
+    const title = makeButton(name, () => openPreview(name, url), "file-title");
+    title.disabled = !url;
+    const actions = document.createElement("div");
+    actions.className = "btns";
+    const open = makeButton("Open", () => window.open(url, "_blank", "noopener,noreferrer"));
+    open.disabled = !url;
+    actions.append(open, makeButton("Rename", () => renameFile(file.id)), makeButton("Move to trash", () => deleteFile(file.id)));
+    card.append(thumb, title, actions);
+    grid.appendChild(card);
+  });
 }
 
 function render(data) {
   currentFolder = data.id;
-  let div = document.getElementById("files");
-  div.innerHTML = "";
-
-  // FOLDERS
-  data.folders.forEach(f => {
-    div.innerHTML += `
-      <div class="card" onclick="openFolder('${f.id}')">
-        📁 ${f.name}
-      </div>
-    `;
-  });
-
-  // FILES
-  data.files.forEach(file => {
-    div.innerHTML += `
-      <div class="card" onclick="openPreview('${file.name}','${file.preview}')">
-        <div class="thumb">
-          <iframe src="${file.preview}"></iframe>
-        </div>
-        <div>${file.name}</div>
-
-        <div class="btns">
-          <button class="btn" onclick="event.stopPropagation(); window.open('${file.preview}')">Open</button>
-          <button class="btn" onclick="event.stopPropagation(); renameFile('${file.id}')">Rename</button>
-          <button class="btn" onclick="event.stopPropagation(); deleteFile('${file.id}')">Delete</button>
-        </div>
-      </div>
-    `;
-  });
+  renderEntries(data);
 }
 
-// FOLDER
-function openFolder(id) {
-  load(id);
-}
-
-// PREVIEW PANEL
 function openPreview(name, url) {
+  if (!url) return;
   document.getElementById("panel").classList.add("active");
-  document.getElementById("pname").innerText = name;
+  document.getElementById("pname").textContent = name;
   document.getElementById("preview").src = url;
 }
 
-// DELETE
 function deleteFile(id) {
-  if(confirm("Delete?")){
-    google.script.run.withSuccessHandler(()=>load(currentFolder)).deleteFile(id);
+  if (confirm("Move this file to Google Drive Trash?")) {
+    google.script.run.withSuccessHandler(() => load(currentFolder)).deleteFile(id);
   }
 }
 
-// RENAME
 function renameFile(id) {
-  let name = prompt("New name:");
-  if(name){
-    google.script.run.withSuccessHandler(()=>load(currentFolder)).renameFile(id,name);
+  const name = prompt("New name:");
+  if (name && name.trim()) {
+    google.script.run.withSuccessHandler(() => load(currentFolder)).renameFile(id, name.trim());
   }
 }
 
-// INIT
 load();
 </script>
 

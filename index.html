@@ -156,7 +156,9 @@
 <div class="main">
   <input class="search" placeholder="Search...">
 
-  <div class="grid" id="files"></div>
+  <p id="status" role="status" aria-live="polite">Loading files…</p>
+  <button class="btn" id="retry" type="button" hidden>Retry loading</button>
+  <div class="grid" id="files" aria-busy="false"></div>
 </div>
 
 <!-- RIGHT PANEL -->
@@ -167,6 +169,28 @@
 
 <script>
 let currentFolder = null;
+let busy = false;
+let requestNumber = 0;
+let lastRequestedFolder = null;
+
+function setStatus(message) {
+  document.getElementById("status").textContent = message;
+}
+
+function setBusy(value) {
+  busy = value;
+  document.getElementById("files").setAttribute("aria-busy", String(value));
+  document.querySelectorAll("#files button").forEach(button => {
+    if (value) { if (button.dataset.wasDisabled === undefined) button.dataset.wasDisabled = String(button.disabled); button.disabled = true; }
+    else if (button.dataset.wasDisabled !== undefined) { button.disabled = button.dataset.wasDisabled === "true"; delete button.dataset.wasDisabled; }
+  });
+}
+
+function showFailure(error) {
+  setBusy(false);
+  setStatus("Could not complete the request. " + (error && error.message ? error.message : "Please try again."));
+  document.getElementById("retry").hidden = false;
+}
 
 function previewUrl(id) {
   return typeof id === "string" && /^[A-Za-z0-9_-]+$/.test(id)
@@ -174,7 +198,25 @@ function previewUrl(id) {
 }
 
 function load(folderId = null) {
-  google.script.run.withSuccessHandler(render).getFiles(folderId);
+  if (typeof google === "undefined" || !google.script || !google.script.run) {
+    setStatus("Open the deployed Google Apps Script web app to connect to your Drive.");
+    return;
+  }
+  const request = ++requestNumber;
+  lastRequestedFolder = folderId;
+  document.getElementById("retry").hidden = true;
+  setBusy(true);
+  setStatus("Loading files…");
+  google.script.run.withSuccessHandler(data => {
+    if (request !== requestNumber) return;
+    try {
+      render(data);
+      setBusy(false);
+      setStatus(data.folders.length + " folders · " + data.files.length + " files");
+    } catch (error) { showFailure(error); }
+  }).withFailureHandler(error => {
+    if (request === requestNumber) showFailure(error);
+  }).getFiles(folderId);
 }
 
 function makeButton(label, action, className = "btn") {
@@ -232,18 +274,25 @@ function openPreview(name, url) {
 }
 
 function deleteFile(id) {
+  if (busy) return;
   if (confirm("Move this file to Google Drive Trash?")) {
-    google.script.run.withSuccessHandler(() => load(currentFolder)).deleteFile(id);
+    setBusy(true);
+    setStatus("Moving file to trash…");
+    google.script.run.withSuccessHandler(() => load(currentFolder)).withFailureHandler(showFailure).deleteFile(id);
   }
 }
 
 function renameFile(id) {
+  if (busy) return;
   const name = prompt("New name:");
   if (name && name.trim()) {
-    google.script.run.withSuccessHandler(() => load(currentFolder)).renameFile(id, name.trim());
+    setBusy(true);
+    setStatus("Renaming file…");
+    google.script.run.withSuccessHandler(() => load(currentFolder)).withFailureHandler(showFailure).renameFile(id, name.trim());
   }
 }
 
+document.getElementById("retry").addEventListener("click", () => load(lastRequestedFolder));
 load();
 </script>
 
